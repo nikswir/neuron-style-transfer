@@ -25,7 +25,13 @@ from style_transfer.transforms import build_transforms
 feature_map = arrays(
     dtype=np.float32,
     shape=(1, 3, 4, 4),
-    elements=st.floats(-10.0, 10.0, allow_nan=False, allow_infinity=False, width=32),
+    elements=st.floats(
+        -10.0,
+        10.0,
+        allow_nan=False,
+        allow_infinity=False,
+        width=32,
+    ),
 )
 
 
