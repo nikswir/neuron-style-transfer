@@ -54,5 +54,5 @@ def test_resnet50_has_16_blocks():
 
 
 def test_unknown_backbone_raises():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported backbone"):
         build_extractor("alexnet")

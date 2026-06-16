@@ -22,12 +22,38 @@ def test_pick_device_explicit_cpu():
     assert cli.pick_device("cpu") == torch.device("cpu")
 
 
+def test_pick_device_auto_resolves_without_raising():
+    # The "auto" path does real branching (cuda -> mps -> cpu); the explicit-cpu
+    # test only exercises the first line. "auto" must resolve to a usable device
+    # without raising. This pins the "auto" sentinel, the and/or in the mps
+    # guard, the getattr lookup and every device-string literal: mutating any of
+    # them makes "auto" raise (torch.device("auto"/None/"CPU")) or wrongly pick mps.
+    expected = (
+        "cuda"
+        if torch.cuda.is_available()
+        else (
+            "mps"
+            if getattr(torch.backends, "mps", None) is not None
+            and torch.backends.mps.is_available()
+            else "cpu"
+        )
+    )
+    assert cli.pick_device("auto").type == expected
+
+
 def test_pair_inputs_by_position():
     assert cli.pair_inputs(["a", "b"], ["x", "y"]) == [("a", "x"), ("b", "y")]
 
 
 def test_pair_inputs_broadcasts_single_style():
     assert cli.pair_inputs(["a", "b", "c"], ["s"]) == [("a", "s"), ("b", "s"), ("c", "s")]
+
+
+def test_pair_inputs_broadcasts_single_content():
+    # 1 content, N styles -> the single content is broadcast across every style.
+    # Exercises the `len(contents) == 1` branch, which the single-style test skips
+    # (it hits the `len(styles) == 1` branch first and returns early).
+    assert cli.pair_inputs(["c"], ["x", "y"]) == [("c", "x"), ("c", "y")]
 
 
 def test_pair_inputs_mismatched_counts_error():
@@ -71,7 +97,8 @@ def test_main_single_pair_writes_output(tmp_path, fake_backbone):
 
     cli.main(_base_args(["--content", str(content), "--style", str(style), "--output", str(out)]))
 
-    assert out.exists() and Image.open(out).size == (16, 16)
+    assert out.exists()
+    assert Image.open(out).size == (16, 16)
 
 
 def test_main_batch_writes_one_file_per_pair(tmp_path, fake_backbone):

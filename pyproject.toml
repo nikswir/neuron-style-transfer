@@ -19,7 +19,7 @@ dependencies = [
 style-transfer = "style_transfer.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest (>=8.0)", "pytest-cov (>=5.0)", "ruff (>=0.6)"]
+dev = ["pytest (>=8.0)", "pytest-cov (>=5.0)", "ruff (>=0.6)", "mutmut (>=3.0)", "mypy (>=1.11)", "hypothesis (>=6.0)"]
 
 [tool.poetry]
 packages = [{ include = "style_transfer", from = "src" }]
@@ -33,7 +33,45 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "PT"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+
+# Third-party libraries without (complete) type stubs.
+[[tool.mypy.overrides]]
+module = ["torchvision.*", "PIL.*"]
+ignore_missing_imports = true
+
+[tool.mutmut]
+# Mutate the package, but skip models.py: it is only covered when backbone
+# weights are downloaded (ST_RUN_BACKBONE=1), so mutating it under the fast
+# offline suite would just produce survivors and skew the score.
+source_paths = ["src/style_transfer/"]
+do_not_mutate = ["*/models.py"]
+
+[tool.coverage.run]
+branch = true
+source = ["style_transfer"]
+
+[tool.coverage.report]
+show_missing = true
+# Don't count lines that can't meaningfully be exercised by the test suite.
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0"]

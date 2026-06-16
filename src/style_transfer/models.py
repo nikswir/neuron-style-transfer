@@ -16,7 +16,9 @@ from torch import nn
 from torchvision import models
 
 
-def _freeze(module: nn.Module) -> nn.Module:
+def _freeze(
+    module: nn.Module,
+) -> nn.Module:
     for param in module.parameters():
         param.requires_grad_(False)
     module.eval()
@@ -31,7 +33,11 @@ class VGGFeatures(nn.Module):
     for both VGG16 and VGG19 since they share the same block structure.
     """
 
-    def __init__(self, backbone: str = "vgg16", weights: str | None = "DEFAULT"):
+    def __init__(
+        self,
+        backbone: str = "vgg16",
+        weights: str | None = "DEFAULT",
+    ):
         super().__init__()
         if backbone == "vgg16":
             net = models.vgg16(weights=weights)
@@ -58,7 +64,10 @@ class VGGFeatures(nn.Module):
                 block, idx, current = block + 1, 0, []
         _freeze(self)
 
-    def forward(self, x: torch.Tensor) -> OrderedDict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> OrderedDict[str, torch.Tensor]:
         out: OrderedDict[str, torch.Tensor] = OrderedDict()
         for name, blk in zip(self.layer_names, self.blocks, strict=True):
             x = blk(x)
@@ -75,7 +84,11 @@ class ResNetFeatures(nn.Module):
     implements the residual connection, so no manual re-wiring is needed.
     """
 
-    def __init__(self, backbone: str = "resnet50", weights: str | None = "DEFAULT"):
+    def __init__(
+        self,
+        backbone: str = "resnet50",
+        weights: str | None = "DEFAULT",
+    ):
         super().__init__()
         if backbone != "resnet50":
             raise ValueError(f"unknown ResNet backbone: {backbone!r}")
@@ -91,7 +104,10 @@ class ResNetFeatures(nn.Module):
                 self.layer_names.append(f"stage{stage_idx}_block{block_idx}")
         _freeze(self)
 
-    def forward(self, x: torch.Tensor) -> OrderedDict[str, torch.Tensor]:
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> OrderedDict[str, torch.Tensor]:
         out: OrderedDict[str, torch.Tensor] = OrderedDict()
         x = self.stem(x)
         for name, blk in zip(self.layer_names, self.blocks, strict=True):
@@ -100,7 +116,10 @@ class ResNetFeatures(nn.Module):
         return out
 
 
-def build_extractor(backbone: str, weights: str | None = "DEFAULT") -> nn.Module:
+def build_extractor(
+    backbone: str,
+    weights: str | None = "DEFAULT",
+) -> nn.Module:
     """Factory: return a frozen feature extractor for the given backbone name."""
     backbone = backbone.lower()
     if backbone in ("vgg16", "vgg19"):

@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.hypothesis/
 .coverage
 htmlcov/
 build/
@@ -25,3 +26,7 @@ texput.log
 .DS_Store
 .idea/
 .vscode/
+# Mutation testing
+mutants/
+.mutmut-cache
+html/

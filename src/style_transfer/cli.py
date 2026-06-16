@@ -34,7 +34,9 @@ DEFAULTS = {
 }
 
 
-def pick_device(requested: str) -> torch.device:
+def pick_device(
+    requested: str,
+) -> torch.device:
     if requested != "auto":
         return torch.device(requested)
     if torch.cuda.is_available():
@@ -44,7 +46,10 @@ def pick_device(requested: str) -> torch.device:
     return torch.device("cpu")
 
 
-def pair_inputs(contents: list[str], styles: list[str]) -> list[tuple[str, str]]:
+def pair_inputs(
+    contents: list[str],
+    styles: list[str],
+) -> list[tuple[str, str]]:
     """Pair content and style paths, broadcasting a single-element list."""
     if len(contents) == len(styles):
         return list(zip(contents, styles, strict=True))
@@ -76,7 +81,9 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(
+    argv: list[str] | None = None,
+) -> None:
     args = build_parser().parse_args(argv)
     device = pick_device(args.device)
 
@@ -112,7 +119,11 @@ def main(argv: list[str] | None = None) -> None:
 
         print(f"\n{content_path} + {style_path} -> {out_path}")
 
-        def log(step, _image, losses_dict):
+        def log(
+            step: int,
+            _image: torch.Tensor,
+            losses_dict: dict[str, float],
+        ) -> None:
             print(
                 f"  step {step:>3} | " + " | ".join(f"{k}={v:.4g}" for k, v in losses_dict.items())
             )

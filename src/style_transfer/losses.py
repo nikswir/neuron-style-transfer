@@ -17,12 +17,17 @@ import torch
 import torch.nn.functional as F
 
 
-def content_loss(generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def content_loss(
+    generated: torch.Tensor,
+    target: torch.Tensor,
+) -> torch.Tensor:
     """Mean squared error between two feature maps of equal shape."""
     return F.mse_loss(generated, target)
 
 
-def gram_matrix(features: torch.Tensor) -> torch.Tensor:
+def gram_matrix(
+    features: torch.Tensor,
+) -> torch.Tensor:
     """Normalized Gram matrix of a feature map batch ``(B, C, H, W)``.
 
     Returns a ``(B, C, C)`` tensor. The result is divided by ``C * H * W`` so
@@ -35,12 +40,17 @@ def gram_matrix(features: torch.Tensor) -> torch.Tensor:
     return gram.div(c * h * w)
 
 
-def style_loss(generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def style_loss(
+    generated: torch.Tensor,
+    target: torch.Tensor,
+) -> torch.Tensor:
     """MSE between the Gram matrices of two feature maps."""
     return F.mse_loss(gram_matrix(generated), gram_matrix(target))
 
 
-def total_variation_loss(image: torch.Tensor) -> torch.Tensor:
+def total_variation_loss(
+    image: torch.Tensor,
+) -> torch.Tensor:
     """Isotropic total-variation regularizer on a ``(B, C, H, W)`` image.
 
     Differences are taken along the spatial height (dim 2) and width (dim 3)

@@ -60,3 +60,26 @@ def test_tv_loss_positive_on_spatial_variation():
     img = torch.zeros(1, 3, 16, 16)
     img[:, :, ::2, :] = 1.0  # alternating rows -> spatial variation
     assert losses.total_variation_loss(img).item() > 0
+
+
+def test_gram_matrix_normalization_factor():
+    # Pins the C*H*W divisor: for an all-ones (B, C, H, W) map every Gram entry
+    # is H*W before normalization, so the normalized value must be exactly 1/C.
+    # Catches mutations of the c * h * w divisor (e.g. c / h * w, c * h / w).
+    c, h, w = 5, 4, 8
+    g = losses.gram_matrix(torch.ones(1, c, h, w))
+    assert torch.allclose(g, torch.full((1, c, c), 1.0 / c), atol=1e-6)
+
+
+def test_tv_loss_exact_value_pins_both_axes():
+    # A 3x3 image with a distinct value in every cell: both the height and width
+    # neighbour-difference slices then have length > 1, so the slice *direction*
+    # matters. (A 2x2 image cannot pin this -- there `:-1` and `:1` select the
+    # same single row/column, leaving `:-1 -> :+1` mutations alive.) Comparing to
+    # F.mse_loss on the correct slices also pins the diff_h + diff_w combination.
+    img = torch.tensor([[[[0.0, 1.0, 2.0], [3.0, 5.0, 8.0], [13.0, 21.0, 34.0]]]])
+    expected_h = torch.nn.functional.mse_loss(img[:, :, :-1, :], img[:, :, 1:, :])
+    expected_w = torch.nn.functional.mse_loss(img[:, :, :, :-1], img[:, :, :, 1:])
+    tv = losses.total_variation_loss(img)
+    assert torch.isclose(tv, expected_h + expected_w)
+    assert tv.item() > 0

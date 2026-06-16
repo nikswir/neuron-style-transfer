@@ -8,18 +8,24 @@ exact inverse (de-normalize -> clamp -> PIL image) used to visualize results.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import torch
 from PIL import Image
 from torchvision import transforms
 
+ToTensor = Callable[[Image.Image], torch.Tensor]
+ToImage = Callable[[torch.Tensor], Image.Image]
+
 # ImageNet statistics used by all torchvision pretrained models.
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
-def build_transforms(image_size: int = 512):
+def build_transforms(
+    image_size: int = 512,
+) -> tuple[ToTensor, ToImage]:
     """Return a ``(to_tensor, to_image)`` pair of callables.
 
     ``to_tensor(PIL.Image) -> Tensor[1, 3, S, S]`` resizes to a square,
@@ -51,7 +57,9 @@ def build_transforms(image_size: int = 512):
 
 
 def load_image(
-    path: str | Path, image_size: int = 512, device: str | torch.device = "cpu"
+    path: str | Path,
+    image_size: int = 512,
+    device: str | torch.device = "cpu",
 ) -> torch.Tensor:
     """Load an image file and return its normalized ``(1, 3, S, S)`` tensor."""
     to_tensor, _ = build_transforms(image_size)
@@ -59,7 +67,11 @@ def load_image(
     return to_tensor(image).to(device)
 
 
-def save_image(tensor: torch.Tensor, path: str | Path, image_size: int = 512) -> None:
+def save_image(
+    tensor: torch.Tensor,
+    path: str | Path,
+    image_size: int = 512,
+) -> None:
     """De-normalize a tensor and write it to ``path`` as an image file."""
     _, to_image = build_transforms(image_size)
     to_image(tensor).save(path)

@@ -9,12 +9,16 @@ supported.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import torch
 from torch import nn, optim
 
 from . import losses
+
+# callback(step, image, losses_dict) -> None
+StepCallback = Callable[[int, torch.Tensor, dict[str, float]], None]
 
 
 @dataclass
@@ -37,7 +41,11 @@ class TransferConfig:
     optimizer: str = "lbfgs"  # "lbfgs" or "adam"
     learning_rate: float = 1.0
 
-    def weight_for(self, layer: str, kind: str) -> float:
+    def weight_for(
+        self,
+        layer: str,
+        kind: str,
+    ) -> float:
         table = self.content_weights if kind == "content" else self.style_weights
         return table.get(layer, 1.0)
 
@@ -50,7 +58,10 @@ class TransferResult:
     history: dict[str, list[float]]
 
 
-def _make_optimizer(cfg: TransferConfig, image: torch.Tensor):
+def _make_optimizer(
+    cfg: TransferConfig,
+    image: torch.Tensor,
+) -> optim.Optimizer:
     if cfg.optimizer == "lbfgs":
         return optim.LBFGS([image], lr=cfg.learning_rate, max_iter=20)
     if cfg.optimizer == "adam":
@@ -60,7 +71,9 @@ def _make_optimizer(cfg: TransferConfig, image: torch.Tensor):
 
 @torch.no_grad()
 def _capture(
-    extractor: nn.Module, image: torch.Tensor, layers: list[str]
+    extractor: nn.Module,
+    image: torch.Tensor,
+    layers: list[str],
 ) -> dict[str, torch.Tensor]:
     feats = extractor(image)
     return {name: feats[name].detach() for name in layers}
@@ -72,7 +85,7 @@ def run_style_transfer(
     extractor: nn.Module,
     cfg: TransferConfig,
     *,
-    callback=None,
+    callback: StepCallback | None = None,
 ) -> TransferResult:
     """Run image-optimization style transfer.
 
@@ -94,9 +107,8 @@ def run_style_transfer(
 
     optimizer = _make_optimizer(cfg, generated)
     history: dict[str, list[float]] = {"content": [], "style": [], "tv": [], "total": []}
-    step = {"i": 0}
 
-    def closure():
+    def closure() -> torch.Tensor:
         optimizer.zero_grad()
         feats = extractor(generated)
 
@@ -123,8 +135,9 @@ def run_style_transfer(
         return total
 
     for i in range(cfg.steps):
-        step["i"] = i
-        optimizer.step(closure)
+        # torch stubs type the closure as `() -> float`, but L-BFGS expects it to
+        # return the loss tensor (which is what we do); the stub is imprecise here.
+        optimizer.step(closure)  # type: ignore[arg-type]
         if callback is not None:
             with torch.no_grad():
                 last = {k: v[-1] for k, v in history.items() if v}
