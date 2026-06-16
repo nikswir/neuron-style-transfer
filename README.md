@@ -5,41 +5,42 @@ Neural style transfer by image optimization (Gatys, Ecker, Bethge,
 pretrained backbones as feature extractors: **VGG16**, **VGG19** and
 **ResNet50**.
 
-<p align="center">
-  <img src="docs/figures/comparison.png" width="720" alt="VGG16 vs VGG19 vs ResNet50"/>
-</p>
-
 ## How it works
 
 The output image is a trainable tensor, initialized from the content image and
 updated by gradient descent so that it is simultaneously:
 
 - **close in content** to the content image — small distance between the deep
-  CNN activations (content loss);
+CNN activations (content loss);
 - **close in style** to the style image — small distance between the Gram
-  matrices of the activations across several layers (style loss);
+matrices of the activations across several layers (style loss);
 - **smooth** — a total-variation regularizer (TV loss).
 
-The total loss is
+The total loss is a weighted sum of the three terms:
 
 $$\mathcal{L} = \alpha\,\mathcal{L}_{\text{content}} + \beta\,\mathcal{L}_{\text{style}} + \gamma\,\mathcal{L}_{\text{TV}}$$
 
-with
+**Content loss** — squared distance between the deep-layer activations of the
+generated image $F^l$ and the content image $P^l$:
 
-$$\mathcal{L}_{\text{content}} = \tfrac{1}{2}\sum_{i,j}\left(F^{l}_{ij} - P^{l}_{ij}\right)^2, \qquad G^{l}_{ij} = \sum_{k} F^{l}_{ik}\,F^{l}_{jk}, \qquad \mathcal{L}_{\text{style}} = \sum_{l} w_l\,\lVert G^{l} - A^{l}\rVert_2^2 .$$
+$$\mathcal{L}_{\text{content}} = \tfrac{1}{2}\sum_{i,j}\left(F^{l}_{ij} - P^{l}_{ij}\right)^2$$
 
-Here $F^l$ are the activations of the generated image at layer $l$, $P^l$ those
-of the content image, and $A^l$, $G^l$ the Gram matrices of the style and
-generated images.
+**Style loss** — squared distance between the Gram matrices (channel
+correlations) $G^l$ of the generated image and $A^l$ of the style image,
+summed over several layers $l$ with weights $w_l$:
 
-## Install
+$$G^{l}_{ij} = \sum_{k} F^{l}_{ik}\,F^{l}_{jk}, \qquad \mathcal{L}_{\text{style}} = \sum_{l} w_l \, \lVert G^{l} - A^{l} \rVert_2^2$$
+
+**Total-variation loss** — smoothness regularizer penalizing differences between
+neighbouring pixels of the generated image $I$:
+
+$$\mathcal{L}_{\text{TV}} = \sum_{i,j}\left(I_{i+1,j} - I_{i,j}\right)^2 + \left(I_{i,j+1} - I_{i,j}\right)^2$$
+
+## Install (Python 3.10–3.12)
 
 ```bash
 poetry install
 ```
-
-Python 3.10–3.12. The device is selected automatically (CUDA, then Apple MPS,
-then CPU).
 
 ## Usage
 
@@ -96,11 +97,13 @@ save_image(result.image, "result.jpg")
 
 ## Results
 
-| Backbone | Style layers | Texture quality | Artifacts |
-|----------|-------------|-----------------|-----------|
-| VGG16    | 13 conv     | good            | few       |
-| VGG19    | 16 conv     | best            | few       |
-| ResNet50 | 16 blocks   | medium          | noticeable |
+
+| Backbone | Style layers | Texture quality | Artifacts  |
+| -------- | ------------ | --------------- | ---------- |
+| VGG16    | 13 conv      | good            | few        |
+| VGG19    | 16 conv      | best            | few        |
+| ResNet50 | 16 blocks    | medium          | noticeable |
+
 
 ResNet50 produces noticeably noisier results: its bottleneck activations (with
 residual connections and batch normalization) describe style texture less
