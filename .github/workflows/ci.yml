@@ -3,6 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    # Skip docs-only pushes; PRs still run the full suite unconditionally.
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "assets/**"
   pull_request:
     branches: ["main"]
 
