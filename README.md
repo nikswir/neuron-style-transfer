@@ -5,6 +5,11 @@ Neural style transfer by image optimization (Gatys, Ecker, Bethge,
 pretrained backbones as feature extractors: **VGG16**, **VGG19** and
 **ResNet50**.
 
+![A cat stylized end-to-end: content image, style image, and the result](docs/figures/teaser.png)
+
+*A cat stylized end-to-end — **content** (left) and **style** (middle) inputs,
+and the **VGG16** result (right).*
+
 ## How it works
 
 The output image is a trainable tensor, initialized from the content image and
