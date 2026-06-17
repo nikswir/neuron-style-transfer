@@ -1,5 +1,7 @@
 # Neural Style Transfer: VGG16 vs VGG19 vs ResNet50
 
+[![CI](https://github.com/nikswir/neuron-style-transfer/actions/workflows/ci.yml/badge.svg)](https://github.com/nikswir/neuron-style-transfer/actions/workflows/ci.yml)
+
 Neural style transfer by image optimization (Gatys, Ecker, Bethge,
 *A Neural Algorithm of Artistic Style*, 2016), with a comparison of three
 pretrained backbones as feature extractors: **VGG16**, **VGG19** and
