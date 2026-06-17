@@ -16,6 +16,10 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 
+########################################
+#             Content loss             #
+########################################
+
 
 def content_loss(
     generated: torch.Tensor,
@@ -23,6 +27,11 @@ def content_loss(
 ) -> torch.Tensor:
     """Mean squared error between two feature maps of equal shape."""
     return F.mse_loss(generated, target)
+
+
+########################################
+#         Style representation         #
+########################################
 
 
 def gram_matrix(
@@ -34,9 +43,12 @@ def gram_matrix(
     its magnitude does not scale with feature-map size; this normalization is
     absorbed into the style weights and keeps them comparable across layers.
     """
+    # ── Channel correlations over all spatial positions ──
     b, c, h, w = features.size()
     flat = features.view(b, c, h * w)
     gram = torch.bmm(flat, flat.transpose(1, 2))
+
+    # ── Normalize so the magnitude is size-independent ──
     return gram.div(c * h * w)
 
 
@@ -48,6 +60,11 @@ def style_loss(
     return F.mse_loss(gram_matrix(generated), gram_matrix(target))
 
 
+########################################
+#         Total-variation loss         #
+########################################
+
+
 def total_variation_loss(
     image: torch.Tensor,
 ) -> torch.Tensor:
@@ -56,6 +73,7 @@ def total_variation_loss(
     Differences are taken along the spatial height (dim 2) and width (dim 3)
     axes -- *not* across colour channels.
     """
+    # ── Neighbour differences along height, then width ──
     diff_h = F.mse_loss(image[:, :, :-1, :], image[:, :, 1:, :])
     diff_w = F.mse_loss(image[:, :, :, :-1], image[:, :, :, 1:])
     return diff_h + diff_w

@@ -8,14 +8,18 @@ weights.
 
 from __future__ import annotations
 
-import numpy as np
-import pytest
 import torch
+import pytest
+import numpy as np
+
 from PIL import Image
 
 from style_transfer import cli
+from tests.test_transfer import TinyExtractor
 
-from .test_transfer import TinyExtractor
+########################################
+#           Device selection           #
+########################################
 
 
 def test_pick_device_explicit_cpu():
@@ -41,12 +45,21 @@ def test_pick_device_auto_resolves_without_raising():
     assert cli.pick_device("auto").type == expected
 
 
+########################################
+#            Input pairing             #
+########################################
+
+
 def test_pair_inputs_by_position():
     assert cli.pair_inputs(["a", "b"], ["x", "y"]) == [("a", "x"), ("b", "y")]
 
 
 def test_pair_inputs_broadcasts_single_style():
-    assert cli.pair_inputs(["a", "b", "c"], ["s"]) == [("a", "s"), ("b", "s"), ("c", "s")]
+    assert cli.pair_inputs(["a", "b", "c"], ["s"]) == [
+        ("a", "s"),
+        ("b", "s"),
+        ("c", "s"),
+    ]
 
 
 def test_pair_inputs_broadcasts_single_content():
@@ -59,6 +72,11 @@ def test_pair_inputs_broadcasts_single_content():
 def test_pair_inputs_mismatched_counts_error():
     with pytest.raises(SystemExit):
         cli.pair_inputs(["a", "b"], ["x", "y", "z"])
+
+
+########################################
+#            End-to-end CLI            #
+########################################
 
 
 def _write_image(path):
@@ -91,7 +109,9 @@ def _base_args(extra):
 
 
 def test_main_single_pair_writes_output(tmp_path, fake_backbone):
-    content, style, out = tmp_path / "c.png", tmp_path / "s.png", tmp_path / "result.jpg"
+    content = tmp_path / "c.png"
+    style = tmp_path / "s.png"
+    out = tmp_path / "result.jpg"
     _write_image(content)
     _write_image(style)
 
@@ -110,7 +130,14 @@ def test_main_batch_writes_one_file_per_pair(tmp_path, fake_backbone):
 
     cli.main(
         _base_args(
-            ["--content", *map(str, contents), "--style", str(style), "--out-dir", str(out_dir)]
+            [
+                "--content",
+                *map(str, contents),
+                "--style",
+                str(style),
+                "--out-dir",
+                str(out_dir),
+            ]
         )
     )
 

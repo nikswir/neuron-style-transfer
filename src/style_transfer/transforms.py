@@ -8,19 +8,29 @@ exact inverse (de-normalize -> clamp -> PIL image) used to visualize results.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
-
 import torch
+
 from PIL import Image
+from pathlib import Path
 from torchvision import transforms
+from collections.abc import Callable
 
 ToTensor = Callable[[Image.Image], torch.Tensor]
 ToImage = Callable[[torch.Tensor], Image.Image]
 
+
+########################################
+#         ImageNet statistics          #
+########################################
+
 # ImageNet statistics used by all torchvision pretrained models.
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+########################################
+#          Transform builders          #
+########################################
 
 
 def build_transforms(
@@ -33,9 +43,11 @@ def build_transforms(
     dimension. ``to_image(Tensor) -> PIL.Image`` inverts the normalization,
     clamps to ``[0, 1]`` and returns a viewable image.
     """
+    # ── Inverse normalization parameters ──
     inv_mean = [-m / s for m, s in zip(IMAGENET_MEAN, IMAGENET_STD, strict=True)]
     inv_std = [1.0 / s for s in IMAGENET_STD]
 
+    # ── Forward: PIL image -> normalized batch tensor ──
     to_tensor = transforms.Compose(
         [
             transforms.Resize((image_size, image_size)),
@@ -45,6 +57,7 @@ def build_transforms(
         ]
     )
 
+    # ── Inverse: tensor -> clamped, viewable PIL image ──
     to_image = transforms.Compose(
         [
             transforms.Lambda(lambda x: x.detach().cpu().squeeze(0)),
@@ -54,6 +67,11 @@ def build_transforms(
         ]
     )
     return to_tensor, to_image
+
+
+########################################
+#               File I/O               #
+########################################
 
 
 def load_image(

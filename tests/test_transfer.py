@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import torch
+import pytest
+
+from torch import nn
 from collections import OrderedDict
 
-import pytest
-import torch
-from torch import nn
-
 from style_transfer.transfer import TransferConfig, _make_optimizer, run_style_transfer
+
+########################################
+#             Test doubles             #
+########################################
 
 
 class TinyExtractor(nn.Module):
@@ -39,6 +43,11 @@ def _cfg(**kw):
     }
     base.update(kw)
     return TransferConfig(**base)
+
+
+########################################
+#          Optimization loop           #
+########################################
 
 
 def test_run_returns_same_shape():
@@ -83,9 +92,17 @@ def test_lbfgs_optimizer_runs():
     content = torch.randn(1, 3, 16, 16)
     style = torch.randn(1, 3, 16, 16)
     result = run_style_transfer(
-        content, style, TinyExtractor(), _cfg(optimizer="lbfgs", learning_rate=0.5, steps=2)
+        content,
+        style,
+        TinyExtractor(),
+        _cfg(optimizer="lbfgs", learning_rate=0.5, steps=2),
     )
     assert torch.isfinite(result.image).all()
+
+
+########################################
+#           Loss composition           #
+########################################
 
 
 def test_total_is_weighted_sum_of_terms_and_terms_nonnegative():
@@ -142,22 +159,6 @@ def test_style_loop_zero_weights_silence_style_term():
     assert all(s == 0.0 for s in h["style"])
 
 
-def test_make_optimizer_passes_learning_rate():
-    # A real bug would be silently optimizing at the wrong rate: assert the
-    # configured learning rate actually reaches the optimizer for both backends.
-    image = torch.zeros(1, 3, 4, 4, requires_grad=True)
-    adam = _make_optimizer(_cfg(optimizer="adam", learning_rate=0.123), image)
-    lbfgs = _make_optimizer(_cfg(optimizer="lbfgs", learning_rate=0.456), image)
-    assert adam.param_groups[0]["lr"] == 0.123
-    assert lbfgs.param_groups[0]["lr"] == 0.456
-
-
-def test_make_optimizer_rejects_unknown():
-    image = torch.zeros(1, 3, 4, 4, requires_grad=True)
-    with pytest.raises(ValueError, match="unknown optimizer"):
-        _make_optimizer(_cfg(optimizer="rmsprop"), image)
-
-
 def test_first_step_losses_match_analytic_sum():
     # At the very first closure `generated` is still a clone of `content`, so the
     # recorded terms must equal the plain (unit-weighted) sum of the per-layer
@@ -177,3 +178,24 @@ def test_first_step_losses_match_analytic_sum():
         exp_s = sum(float(L.style_loss(cf[layer], sf[layer])) for layer in cfg.style_layers)
     assert h["content"][0] == pytest.approx(exp_c, abs=1e-7)
     assert h["style"][0] == pytest.approx(exp_s, rel=1e-5)
+
+
+########################################
+#          Optimizer factory           #
+########################################
+
+
+def test_make_optimizer_passes_learning_rate():
+    # A real bug would be silently optimizing at the wrong rate: assert the
+    # configured learning rate actually reaches the optimizer for both backends.
+    image = torch.zeros(1, 3, 4, 4, requires_grad=True)
+    adam = _make_optimizer(_cfg(optimizer="adam", learning_rate=0.123), image)
+    lbfgs = _make_optimizer(_cfg(optimizer="lbfgs", learning_rate=0.456), image)
+    assert adam.param_groups[0]["lr"] == 0.123
+    assert lbfgs.param_groups[0]["lr"] == 0.456
+
+
+def test_make_optimizer_rejects_unknown():
+    image = torch.zeros(1, 3, 4, 4, requires_grad=True)
+    with pytest.raises(ValueError, match="unknown optimizer"):
+        _make_optimizer(_cfg(optimizer="rmsprop"), image)

@@ -10,16 +10,21 @@ fast.
 
 from __future__ import annotations
 
-import numpy as np
-import pytest
 import torch
+import pytest
+import numpy as np
+
+from PIL import Image
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
-from PIL import Image
 
 from style_transfer import losses
 from style_transfer.transforms import build_transforms
+
+########################################
+#              Strategies              #
+########################################
 
 # A small (B, C, H, W) feature map of finite float32 values.
 feature_map = arrays(
@@ -28,11 +33,16 @@ feature_map = arrays(
     elements=st.floats(
         -10.0,
         10.0,
-        allow_nan=False,
         allow_infinity=False,
+        allow_nan=False,
         width=32,
     ),
 )
+
+
+########################################
+#            Loss invariants           #
+########################################
 
 
 @given(feature_map)
@@ -42,7 +52,10 @@ def test_content_loss_is_zero_on_identity(x: np.ndarray) -> None:
 
 
 @given(feature_map, feature_map)
-def test_content_loss_is_nonnegative_and_symmetric(x: np.ndarray, y: np.ndarray) -> None:
+def test_content_loss_is_nonnegative_and_symmetric(
+    x: np.ndarray,
+    y: np.ndarray,
+) -> None:
     a, b = torch.from_numpy(x), torch.from_numpy(y)
     ab = losses.content_loss(a, b).item()
     ba = losses.content_loss(b, a).item()
@@ -51,7 +64,10 @@ def test_content_loss_is_nonnegative_and_symmetric(x: np.ndarray, y: np.ndarray)
 
 
 @given(feature_map, feature_map)
-def test_style_loss_is_nonnegative_and_zero_on_identity(x: np.ndarray, y: np.ndarray) -> None:
+def test_style_loss_is_nonnegative_and_zero_on_identity(
+    x: np.ndarray,
+    y: np.ndarray,
+) -> None:
     a, b = torch.from_numpy(x), torch.from_numpy(y)
     assert losses.style_loss(a, b).item() >= 0.0
     assert losses.style_loss(a, a).item() == pytest.approx(0.0, abs=1e-6)
@@ -68,6 +84,11 @@ def test_gram_matrix_is_symmetric(x: np.ndarray) -> None:
 def test_tv_loss_vanishes_on_constant_image(value: float) -> None:
     image = torch.full((1, 3, 8, 8), value)
     assert losses.total_variation_loss(image).item() == pytest.approx(0.0, abs=1e-6)
+
+
+########################################
+#         Transform round-trip         #
+########################################
 
 
 @given(arrays(dtype=np.uint8, shape=(16, 16, 3), elements=st.integers(0, 255)))

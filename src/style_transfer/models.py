@@ -9,20 +9,30 @@ kept in ``eval`` mode -- only the generated image is ever optimized.
 
 from __future__ import annotations
 
-from collections import OrderedDict
-
 import torch
+
 from torch import nn
 from torchvision import models
+from collections import OrderedDict
+
+########################################
+#            Freeze helper             #
+########################################
 
 
 def _freeze(
     module: nn.Module,
 ) -> nn.Module:
+    """Disable grads on every parameter and switch the module to ``eval``."""
     for param in module.parameters():
         param.requires_grad_(False)
     module.eval()
     return module
+
+
+########################################
+#        VGG feature extractor         #
+########################################
 
 
 class VGGFeatures(nn.Module):
@@ -39,6 +49,8 @@ class VGGFeatures(nn.Module):
         weights: str | None = "DEFAULT",
     ):
         super().__init__()
+
+        # ── 1. Pick the backbone ────────────────────
         if backbone == "vgg16":
             net = models.vgg16(weights=weights)
         elif backbone == "vgg19":
@@ -46,13 +58,14 @@ class VGGFeatures(nn.Module):
         else:
             raise ValueError(f"unknown VGG backbone: {backbone!r}")
 
+        # ── 2. Split features into conv+ReLU / pool blocks ──
         self.blocks = nn.ModuleList()
         self.layer_names: list[str] = []
         block, idx, current = 1, 0, []
         for layer in net.features:
             current.append(layer)
             if isinstance(layer, nn.ReLU):
-                # ReLU is made non-inplace so stored activations are not mutated.
+                # ReLU is made non-inplace so stored activations survive.
                 current[-1] = nn.ReLU(inplace=False)
                 idx += 1
                 self.blocks.append(nn.Sequential(*current))
@@ -62,17 +75,25 @@ class VGGFeatures(nn.Module):
                 self.blocks.append(nn.Sequential(*current))
                 self.layer_names.append(f"pool{block}")
                 block, idx, current = block + 1, 0, []
+
+        # ── 3. Freeze every parameter ───────────────
         _freeze(self)
 
     def forward(
         self,
         x: torch.Tensor,
     ) -> OrderedDict[str, torch.Tensor]:
+        # ── Run each block, recording its output ──
         out: OrderedDict[str, torch.Tensor] = OrderedDict()
         for name, blk in zip(self.layer_names, self.blocks, strict=True):
             x = blk(x)
             out[name] = x
         return out
+
+
+########################################
+#       ResNet feature extractor       #
+########################################
 
 
 class ResNetFeatures(nn.Module):
@@ -90,11 +111,14 @@ class ResNetFeatures(nn.Module):
         weights: str | None = "DEFAULT",
     ):
         super().__init__()
+
+        # ── 1. Pick the backbone and isolate its stem ──
         if backbone != "resnet50":
             raise ValueError(f"unknown ResNet backbone: {backbone!r}")
         net = models.resnet50(weights=weights)
-
         self.stem = nn.Sequential(net.conv1, net.bn1, net.relu, net.maxpool)
+
+        # ── 2. Index every bottleneck block by stage ──
         self.blocks = nn.ModuleList()
         self.layer_names: list[str] = []
         stages = [net.layer1, net.layer2, net.layer3, net.layer4]
@@ -102,12 +126,15 @@ class ResNetFeatures(nn.Module):
             for block_idx, block in enumerate(stage):
                 self.blocks.append(block)
                 self.layer_names.append(f"stage{stage_idx}_block{block_idx}")
+
+        # ── 3. Freeze every parameter ───────────────
         _freeze(self)
 
     def forward(
         self,
         x: torch.Tensor,
     ) -> OrderedDict[str, torch.Tensor]:
+        # ── Stem once, then each block in turn ──
         out: OrderedDict[str, torch.Tensor] = OrderedDict()
         x = self.stem(x)
         for name, blk in zip(self.layer_names, self.blocks, strict=True):
@@ -116,11 +143,17 @@ class ResNetFeatures(nn.Module):
         return out
 
 
+########################################
+#          Extractor factory           #
+########################################
+
+
 def build_extractor(
     backbone: str,
     weights: str | None = "DEFAULT",
 ) -> nn.Module:
-    """Factory: return a frozen feature extractor for the given backbone name."""
+    """Factory: return a frozen feature extractor for the given backbone."""
+    # ── Dispatch on the backbone name ──
     backbone = backbone.lower()
     if backbone in ("vgg16", "vgg19"):
         return VGGFeatures(backbone, weights=weights)

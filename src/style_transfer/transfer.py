@@ -9,16 +9,21 @@ supported.
 
 from __future__ import annotations
 
+import torch
+
+from torch import nn, optim
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-import torch
-from torch import nn, optim
-
-from . import losses
+from style_transfer import losses
 
 # callback(step, image, losses_dict) -> None
 StepCallback = Callable[[int, torch.Tensor, dict[str, float]], None]
+
+
+########################################
+#            Configuration             #
+########################################
 
 
 @dataclass
@@ -36,10 +41,10 @@ class TransferConfig:
     style_weights: dict[str, float] = field(default_factory=dict)
     content_weight: float = 1.0
     style_weight: float = 1e6
+    learning_rate: float = 1.0
+    optimizer: str = "lbfgs"
     tv_weight: float = 1.0
     steps: int = 50
-    optimizer: str = "lbfgs"  # "lbfgs" or "adam"
-    learning_rate: float = 1.0
 
     def weight_for(
         self,
@@ -50,12 +55,22 @@ class TransferConfig:
         return table.get(layer, 1.0)
 
 
+########################################
+#                Result                #
+########################################
+
+
 @dataclass
 class TransferResult:
     """Output of :func:`run_style_transfer`."""
 
     image: torch.Tensor
     history: dict[str, list[float]]
+
+
+########################################
+#          Optimizer factory           #
+########################################
 
 
 def _make_optimizer(
@@ -69,6 +84,11 @@ def _make_optimizer(
     raise ValueError(f"unknown optimizer: {cfg.optimizer!r}")
 
 
+########################################
+#            Target capture            #
+########################################
+
+
 @torch.no_grad()
 def _capture(
     extractor: nn.Module,
@@ -77,6 +97,11 @@ def _capture(
 ) -> dict[str, torch.Tensor]:
     feats = extractor(image)
     return {name: feats[name].detach() for name in layers}
+
+
+########################################
+#          Optimization loop           #
+########################################
 
 
 def run_style_transfer(
@@ -100,43 +125,57 @@ def run_style_transfer(
     callback:
         Optional ``callback(step, image, losses_dict)`` invoked once per step.
     """
+    # ── 1. The generated image is the only trainable tensor ──
     generated = content.clone().requires_grad_(True)
 
+    # ── 2. Pre-compute the constant content / style targets ──
     content_targets = _capture(extractor, content, cfg.content_layers)
     style_targets = _capture(extractor, style, cfg.style_layers)
 
+    # ── 3. Optimizer and per-term loss history ──
     optimizer = _make_optimizer(cfg, generated)
-    history: dict[str, list[float]] = {"content": [], "style": [], "tv": [], "total": []}
+    history: dict[str, list[float]] = {
+        "content": [],
+        "style": [],
+        "tv": [],
+        "total": [],
+    }
 
     def closure() -> torch.Tensor:
+        # ── Re-run the network on the current image ──
         optimizer.zero_grad()
         feats = extractor(generated)
 
+        # ── Content term ──
         c_loss = generated.new_zeros(())
         for layer in cfg.content_layers:
             c_loss = c_loss + cfg.weight_for(layer, "content") * losses.content_loss(
                 feats[layer], content_targets[layer]
             )
 
+        # ── Style term ──
         s_loss = generated.new_zeros(())
         for layer in cfg.style_layers:
             s_loss = s_loss + cfg.weight_for(layer, "style") * losses.style_loss(
                 feats[layer], style_targets[layer]
             )
 
+        # ── Total-variation term, then the weighted sum ──
         tv = losses.total_variation_loss(generated)
         total = cfg.content_weight * c_loss + cfg.style_weight * s_loss + cfg.tv_weight * tv
         total.backward()
 
+        # ── Record the per-term history ──
         history["content"].append(float(c_loss.detach()))
         history["style"].append(float(s_loss.detach()))
         history["tv"].append(float(tv.detach()))
         history["total"].append(float(total.detach()))
         return total
 
+    # ── 4. Step the optimizer, invoking the callback per step ──
     for i in range(cfg.steps):
-        # torch stubs type the closure as `() -> float`, but L-BFGS expects it to
-        # return the loss tensor (which is what we do); the stub is imprecise here.
+        # torch stubs type the closure as `() -> float`, but L-BFGS expects it
+        # to return the loss tensor (which is what we do); the stub is imprecise.
         optimizer.step(closure)  # type: ignore[arg-type]
         if callback is not None:
             with torch.no_grad():

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import numpy as np
 import torch
+import numpy as np
+
 from PIL import Image
 
-from style_transfer.transforms import build_transforms, load_image, save_image
+from style_transfer.transforms import load_image, save_image, build_transforms
+
+########################################
+#             Conversions              #
+########################################
 
 
 def test_to_tensor_shape_and_batch_dim():
@@ -30,6 +35,11 @@ def test_roundtrip_recovers_image():
     assert np.abs(a - b).max() <= 2
 
 
+########################################
+#               Clamping               #
+########################################
+
+
 def test_to_image_clamps_out_of_range():
     _, to_image = build_transforms(image_size=8)
     out = to_image(torch.full((1, 3, 8, 8), 100.0))
@@ -48,6 +58,11 @@ def test_to_image_clamps_both_bounds_exactly():
     assert high.min() == 255
     assert low.max() == 0
     assert low.min() == 0
+
+
+########################################
+#               File I/O               #
+########################################
 
 
 def test_load_and_save_image_roundtrip_via_disk(tmp_path):
