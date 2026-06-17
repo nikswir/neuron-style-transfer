@@ -82,11 +82,10 @@ what makes the file skimmable — do not skip it to save space.
 
 ## 3. Narrow code — break early, never crowd a line
 
-**Hard limit: 79 characters, measured from the first non-whitespace character
-— leading indentation does not count.** So the budget is 79 chars of actual
-content at any nesting depth, not 79 minus the indent. An extra line is always
-better than a long one; when the content does not fit in its 79, explode it
-vertically, one element per line.
+**Hard limit: 100 columns — the same `line-length` the project's `ruff format`
+enforces, so the code, this guide and the linter all agree.** An extra line is
+always better than a long one; when the content does not fit in its 100,
+explode it vertically, one element per line.
 
 Dicts / collections — one element per line, trailing comma:
 
@@ -157,7 +156,103 @@ Always type-annotate parameters and return values.
 
 ---
 
-## 5. Putting it together
+## 5. Block ladders — order sibling lines by length
+
+Code is read as blocks; ordered line lengths make a block's structure pop.
+Within a run of *parallel sibling lines* — call arguments, list/tuple elements,
+dict entries, `__all__` exports, a group of CLI flags — order the lines so their
+**lengths form a ladder**: monotonically rising or falling, no jagged spikes.
+Write it laddered *from the first draft*, not as a later cleanup pass.
+
+Approximate is fine. A "mountain" (rise then fall) or a single small bump still
+reads as order — the goal is *chaos → order*, not a flawless staircase.
+
+**Logic always outranks the ladder.** Reorder only where order is genuinely
+free — i.e. it cannot change behaviour. Never trade meaning for shape:
+
+- Primary stays ahead of secondary. Don't float an optional/secondary item in
+  front of a primary one to win a length (keep `content_layers` before
+  `content_weight`).
+- The primary pair stays adjacent: `content` before `style`, always.
+- A primary *group* stays first even if entering it costs one length jump —
+  take the jump rather than invert primacy.
+- An aggregate stays last: `total` after its parts, a sum after its terms.
+- Never touch order that *is* meaning: positional parameters (the call
+  signature), flag/value pairs, data-dependency chains (`b` built from `a`), the
+  words of a split string literal.
+
+Example — constructor kwargs (order is free) laddered while the layers group
+stays first and the `content → style` pairs stay adjacent:
+
+```
+    cfg = TransferConfig(
+        content_layers=content_layers,
+        style_layers=style_layers,
+        content_weight=args.content_weight,
+        style_weight=args.style_weight,
+        tv_weight=args.tv_weight,
+        optimizer=args.optimizer,
+        learning_rate=args.lr,
+        steps=args.steps,
+    )
+```
+
+Lengths `38, 34, 43, 39, 33, 33, 30, 25`: the layers pair leads (38, 34), then a
+jump up into the weights and a smooth descent 43 → 25. Run-params always go
+`optimizer → learning_rate → steps`.
+
+**Measure with a tool, never by eye** — counting columns in your head is
+unreliable. Read each line's length with `awk` over the block's line range:
+
+```
+awk 'NR>=150 && NR<=157 { print length, $0 }' src/style_transfer/cli.py
+```
+
+A ladder rises or falls with no jagged spike. (`length` counts bytes — fine for
+ASCII code lines; don't measure `─`/`→` banner lines.) Then reorder a jagged
+block, or confirm its jump is logic-driven and leave it (a forced valley, e.g. a
+dataclass's no-default fields first, is fine).
+
+---
+
+## 6. Import blocks — four ladders
+
+Imports form up to four blocks, blank-line separated, in this fixed order
+(`from __future__ …` is always pinned first, above everything):
+
+1. `import <third-party>`        — plain imports of stdlib / third-party
+2. `from <third-party> import …`
+3. `import <first-party>`        — plain imports of this project's own packages
+4. `from <first-party> import …`
+
+Two ordering axes: `import` before `from …`, and *third-party before
+first-party*. "Third-party" covers everything external — the standard library
+and installed packages alike; "first-party" is this project's own code. **Always
+use absolute imports** (`from package.models import …`), never relative
+(`from .models …`). **Each block is an ascending ladder** — sort its lines
+short → long, and sort the names inside a `from X import a, b, c` the same way.
+
+```
+from __future__ import annotations
+
+import torch
+import argparse
+
+from pathlib import Path
+
+from package.models import build_extractor
+from package.transforms import load_image, save_image
+from package.transfer import TransferConfig, run_style_transfer
+```
+
+This is why ruff's isort rule (`I`) is **off** — it sorts alphabetically by its
+own stdlib/third-party/first-party sectioning and would fight this scheme.
+`ruff format` leaves import order alone, so nothing re-sorts them; keep the
+blocks tidy by hand (measure with `awk` as in §5).
+
+---
+
+## 7. Putting it together
 
 ```
 class Router(nn.Module):
