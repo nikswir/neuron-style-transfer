@@ -46,44 +46,61 @@ $$\mathcal{L}_{\text{TV}} = \sum_{i,j}\left(I_{i+1,j} - I_{i,j}\right)^2 + \left
 ## Install (Python 3.10–3.12)
 
 ```bash
-poetry install
+uv sync
 ```
 
 ## Usage
 
-Stylize a single content/style pair:
+Runs are configured with [Hydra](https://hydra.cc): each run is composed from
+small config groups under `configs/` and written to its own output directory.
+
+Stylize the default pair (`configs/config.yaml`):
 
 ```bash
-poetry run style-transfer \
-    --content assets/content1.jpg \
-    --style   assets/style1.jpg \
-    --output  result.jpg \
-    --backbone vgg19 --steps 50
+uv run python -m style_transfer.run
 ```
 
-Run several pairs at once (paired by position, written to `--out-dir`):
+Compose a run — pick a group option, override any field:
 
 ```bash
-poetry run style-transfer \
-    --content assets/content1.jpg assets/content2.jpeg \
-    --style   assets/style1.jpg  assets/style2.jpeg \
-    --out-dir out/
+uv run python -m style_transfer.run \
+    backbone=resnet50 \
+    data=pair2 \
+    transfer.steps=200 \
+    runtime.image_size=256
 ```
 
-Apply one style to many content images (the single list is broadcast):
+Print the composed config without running it:
 
 ```bash
-poetry run style-transfer \
-    --content assets/content1.jpg assets/content2.jpeg assets/content3.jpg \
-    --style   assets/style1.jpg \
-    --out-dir out/
+uv run python -m style_transfer.run --cfg job
 ```
 
-Key options: `--backbone {vgg16,vgg19,resnet50}`, `--image-size`, `--steps`,
-`--optimizer {lbfgs,adam}`, `--lr`, `--style-weight`, `--content-weight`,
-`--tv-weight`, `--device`.
+Batch with `--multirun` — every job gets its own output directory:
 
-From Python:
+```bash
+# one run per pair
+uv run python -m style_transfer.run --multirun data=pair1,pair2,pair3
+
+# the cartesian product (backbones × recipes)
+uv run python -m style_transfer.run --multirun backbone=vgg16,vgg19 transfer=default
+```
+
+### Configuration groups
+
+```text
+configs/
+├── config.yaml          # the `defaults` list that composes a run
+├── backbone/  vgg16 · vgg19 · resnet50   # feature extractor
+├── data/      pair1 · pair2 · pair3       # content/style pair
+├── transfer/  default                     # loss weights, optimizer, lr, steps
+└── runtime/   default                     # image_size, device, output filename
+```
+
+Add a variant by dropping a file into a group (e.g. `configs/transfer/quality.yaml`)
+and select it with `transfer=quality`.
+
+### From Python
 
 ```python
 from style_transfer import build_extractor, load_image, save_image
