@@ -1,0 +1,7 @@
+# Gatys et al. defaults: L-BFGS, strong style weight.
+content_weight: 1.0
+style_weight: 1.0e6
+tv_weight: 1.0
+optimizer: lbfgs
+learning_rate: 1.0
+steps: 50

@@ -1,0 +1,10 @@
+# Top-level config: the `defaults` list composes a run from the four groups
+# (a backbone, an input pair, an optimization recipe, runtime knobs). Every
+# field now lives in a group; override with `group=option` or `group.field=…`.
+defaults:
+  - config_schema
+  - backbone: vgg19
+  - data: pair1
+  - transfer: default
+  - runtime: default
+  - _self_

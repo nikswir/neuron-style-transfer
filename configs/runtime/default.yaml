@@ -1,0 +1,6 @@
+# Execution + I/O: working resolution (square), device, output filename.
+# The output is written into Hydra's per-run directory, so repeated runs and
+# `--multirun` jobs never overwrite each other.
+image_size: 512
+device: auto
+output: result.jpg
