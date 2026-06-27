@@ -5,11 +5,12 @@ __pycache__/
 .pytest_cache/
 .hypothesis/
 .coverage
+coverage.json
 htmlcov/
 build/
 dist/
 
-# Poetry / venv
+# venv (uv)
 .venv/
 
 # LaTeX build artifacts
@@ -31,3 +32,7 @@ mutants/
 .mutmut-cache
 html/
 tmp/
+
+# Hydra run directories
+outputs/
+multirun/
