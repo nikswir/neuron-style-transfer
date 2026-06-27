@@ -44,7 +44,9 @@ def build_transforms(
     clamps to ``[0, 1]`` and returns a viewable image.
     """
     # ── Inverse normalization parameters ──
-    inv_mean = [-m / s for m, s in zip(IMAGENET_MEAN, IMAGENET_STD, strict=True)]
+    inv_mean = [
+        -m / s for m, s in zip(IMAGENET_MEAN, IMAGENET_STD, strict=True)
+    ]
     inv_std = [1.0 / s for s in IMAGENET_STD]
 
     # ── Forward: PIL image -> normalized batch tensor ──
@@ -54,7 +56,7 @@ def build_transforms(
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
             transforms.Lambda(lambda x: x.unsqueeze(0)),
-        ]
+        ],
     )
 
     # ── Inverse: tensor -> clamped, viewable PIL image ──
@@ -64,7 +66,7 @@ def build_transforms(
             transforms.Normalize(mean=inv_mean, std=inv_std),
             transforms.Lambda(lambda t: torch.clamp(t, 0.0, 1.0)),
             transforms.ToPILImage(),
-        ]
+        ],
     )
     return to_tensor, to_image
 
@@ -88,8 +90,11 @@ def load_image(
 def save_image(
     tensor: torch.Tensor,
     path: str | Path,
-    image_size: int = 512,
 ) -> None:
-    """De-normalize a tensor and write it to ``path`` as an image file."""
-    _, to_image = build_transforms(image_size)
+    """De-normalize a tensor and write it to ``path`` as an image file.
+
+    The output size is the tensor's own spatial size; the inverse transform
+    only de-normalizes and clamps, so no ``image_size`` is needed here.
+    """
+    _, to_image = build_transforms()
     to_image(tensor).save(path)

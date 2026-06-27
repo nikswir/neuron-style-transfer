@@ -41,7 +41,7 @@ feature_map = arrays(
 
 
 ########################################
-#            Loss invariants           #
+#           Loss invariants            #
 ########################################
 
 
@@ -57,10 +57,10 @@ def test_content_loss_is_nonnegative_and_symmetric(
     y: np.ndarray,
 ) -> None:
     a, b = torch.from_numpy(x), torch.from_numpy(y)
-    ab = losses.content_loss(a, b).item()
-    ba = losses.content_loss(b, a).item()
-    assert ab >= 0.0
-    assert ab == pytest.approx(ba)
+    loss_forward = losses.content_loss(a, b).item()
+    loss_swapped = losses.content_loss(b, a).item()
+    assert loss_forward >= 0.0
+    assert loss_forward == pytest.approx(loss_swapped)
 
 
 @given(feature_map, feature_map)
@@ -83,7 +83,10 @@ def test_gram_matrix_is_symmetric(x: np.ndarray) -> None:
 @given(st.floats(-5.0, 5.0, allow_nan=False, allow_infinity=False, width=32))
 def test_tv_loss_vanishes_on_constant_image(value: float) -> None:
     image = torch.full((1, 3, 8, 8), value)
-    assert losses.total_variation_loss(image).item() == pytest.approx(0.0, abs=1e-6)
+    assert losses.total_variation_loss(image).item() == pytest.approx(
+        0.0,
+        abs=1e-6,
+    )
 
 
 ########################################

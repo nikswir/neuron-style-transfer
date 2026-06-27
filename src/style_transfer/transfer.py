@@ -13,7 +13,7 @@ import torch
 
 from torch import nn, optim
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import field, dataclass
 
 from style_transfer import losses
 
@@ -51,7 +51,9 @@ class TransferConfig:
         layer: str,
         kind: str,
     ) -> float:
-        table = self.content_weights if kind == "content" else self.style_weights
+        table = (
+            self.content_weights if kind == "content" else self.style_weights
+        )
         return table.get(layer, 1.0)
 
 
@@ -149,20 +151,32 @@ def run_style_transfer(
         # ── Content term ──
         c_loss = generated.new_zeros(())
         for layer in cfg.content_layers:
-            c_loss = c_loss + cfg.weight_for(layer, "content") * losses.content_loss(
-                feats[layer], content_targets[layer]
+            c_loss = c_loss + cfg.weight_for(
+                layer,
+                "content",
+            ) * losses.content_loss(
+                feats[layer],
+                content_targets[layer],
             )
 
         # ── Style term ──
         s_loss = generated.new_zeros(())
         for layer in cfg.style_layers:
-            s_loss = s_loss + cfg.weight_for(layer, "style") * losses.style_loss(
-                feats[layer], style_targets[layer]
+            s_loss = s_loss + cfg.weight_for(
+                layer,
+                "style",
+            ) * losses.style_loss(
+                feats[layer],
+                style_targets[layer],
             )
 
         # ── Total-variation term, then the weighted sum ──
         tv = losses.total_variation_loss(generated)
-        total = cfg.content_weight * c_loss + cfg.style_weight * s_loss + cfg.tv_weight * tv
+        total = (
+            cfg.content_weight * c_loss
+            + cfg.style_weight * s_loss
+            + cfg.tv_weight * tv
+        )
         total.backward()
 
         # ── Record the per-term history ──
@@ -175,7 +189,7 @@ def run_style_transfer(
     # ── 4. Step the optimizer, invoking the callback per step ──
     for i in range(cfg.steps):
         # torch stubs type the closure as `() -> float`, but L-BFGS expects it
-        # to return the loss tensor (which is what we do); the stub is imprecise.
+        # to return the loss tensor (what we do); the stub is imprecise.
         optimizer.step(closure)  # type: ignore[arg-type]
         if callback is not None:
             with torch.no_grad():

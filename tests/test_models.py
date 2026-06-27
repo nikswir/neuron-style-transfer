@@ -1,7 +1,8 @@
 """Tests for the feature extractors.
 
-These download pretrained weights, so they are gated behind ST_RUN_BACKBONE=1
-(see conftest). Run with: ``ST_RUN_BACKBONE=1 poetry run pytest tests/test_models.py``.
+These download pretrained weights, so they are gated as stage 2 (see
+conftest). Run with:
+``RUN_STAGE2=1 uv run pytest tests/test_models.py``.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import torch
 import pytest
 
-from tests.conftest import requires_backbone
+from tests.conftest import stage2
 from style_transfer.models import build_extractor
 
 ########################################
@@ -17,7 +18,7 @@ from style_transfer.models import build_extractor
 ########################################
 
 
-@requires_backbone
+@stage2
 @pytest.mark.parametrize("backbone", ["vgg16", "vgg19", "resnet50"])
 def test_forward_returns_named_activations(backbone):
     extractor = build_extractor(backbone)
@@ -33,7 +34,7 @@ def test_forward_returns_named_activations(backbone):
 ########################################
 
 
-@requires_backbone
+@stage2
 @pytest.mark.parametrize("backbone", ["vgg16", "vgg19", "resnet50"])
 def test_parameters_are_frozen(backbone):
     extractor = build_extractor(backbone)
@@ -46,21 +47,21 @@ def test_parameters_are_frozen(backbone):
 ########################################
 
 
-@requires_backbone
+@stage2
 def test_vgg16_has_13_conv_layers():
     extractor = build_extractor("vgg16")
     conv_layers = [n for n in extractor.layer_names if n.startswith("conv")]
     assert len(conv_layers) == 13
 
 
-@requires_backbone
+@stage2
 def test_vgg19_has_16_conv_layers():
     extractor = build_extractor("vgg19")
     conv_layers = [n for n in extractor.layer_names if n.startswith("conv")]
     assert len(conv_layers) == 16
 
 
-@requires_backbone
+@stage2
 def test_resnet50_has_16_blocks():
     extractor = build_extractor("resnet50")
     assert len(extractor.layer_names) == 16

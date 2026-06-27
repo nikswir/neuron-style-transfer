@@ -1,4 +1,4 @@
-"""Tests for the optimization loop, using a tiny fake extractor (no downloads)."""
+"""Tests for the optimization loop with a tiny fake extractor (no downloads)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ import pytest
 from torch import nn
 from collections import OrderedDict
 
-from style_transfer.transfer import TransferConfig, _make_optimizer, run_style_transfer
+from style_transfer.transfer import (
+    TransferConfig,
+    _make_optimizer,
+    run_style_transfer,
+)
 
 ########################################
 #             Test doubles             #
@@ -76,16 +80,40 @@ def test_optimization_reduces_total_loss():
 
 def test_callback_invoked_per_step():
     calls = []
+    images = []
     content = torch.randn(1, 3, 16, 16)
     style = torch.randn(1, 3, 16, 16)
+
+    losses_seen = []
+
+    def record(i, img, losses):
+        calls.append(i)
+        images.append(img)
+        losses_seen.append(losses)
+
     run_style_transfer(
         content,
         style,
         TinyExtractor(),
         _cfg(steps=3),
-        callback=lambda i, img, losses: calls.append(i),
+        callback=record,
     )
     assert calls == [0, 1, 2]
+
+    # The callback must receive the live generated image (detached), not a
+    # placeholder -- pins the image argument passed at the call site.
+    assert all(img is not None for img in images)
+    assert all(img.shape == content.shape for img in images)
+    assert all(not img.requires_grad for img in images)
+
+    # The third argument is the per-step loss snapshot: every recorded term,
+    # finite. Pins the `last` mapping -- a mutant nulling it would surface here.
+    assert all(
+        set(d) == {"content", "style", "tv", "total"} for d in losses_seen
+    )
+    assert all(
+        all(isinstance(v, float) for v in d.values()) for d in losses_seen
+    )
 
 
 def test_lbfgs_optimizer_runs():
@@ -115,7 +143,13 @@ def test_total_is_weighted_sum_of_terms_and_terms_nonnegative():
     style = torch.randn(1, 3, 16, 16)
     cfg = _cfg(content_weight=2.0, style_weight=3.0, tv_weight=5.0, steps=4)
     h = run_style_transfer(content, style, TinyExtractor(), cfg).history
-    for c, s, tv, total in zip(h["content"], h["style"], h["tv"], h["total"], strict=True):
+    for c, s, tv, total in zip(
+        h["content"],
+        h["style"],
+        h["tv"],
+        h["total"],
+        strict=True,
+    ):
         assert c >= 0.0
         assert s >= 0.0
         assert tv >= 0.0
@@ -127,13 +161,13 @@ def test_total_is_weighted_sum_of_terms_and_terms_nonnegative():
 
 
 def test_content_loop_reads_content_weight_table():
-    # The content loop must look up content_weights, the style loop style_weights
+    # The content loop looks up content_weights, the style loop style_weights
     # (weight_for routes on the "content"/"style" kind). Zero layer "b" in
     # content_weights but give it a large value in style_weights: with correct
     # routing the content term stays exactly 0, while the non-zero style weight
     # drives the image away from the content so an *unweighted* content loss is
     # > 0. If the content loop ever read the style table (a wrong/typo'd kind,
-    # which falls through to style_weights), the recorded content term would jump
+    # which falls through to style_weights), the content term would jump
     # above 0. This pins the kind argument, not just the layer key.
     torch.manual_seed(0)
     content = torch.randn(1, 3, 16, 16)
@@ -144,14 +178,16 @@ def test_content_loop_reads_content_weight_table():
         style_weights={"a": 0.5, "b": 7.0},
     )
     h = run_style_transfer(content, style, TinyExtractor(), cfg).history
-    assert all(c == 0.0 for c in h["content"])  # content term genuinely silenced
+    assert all(
+        c == 0.0 for c in h["content"]
+    )  # content term genuinely silenced
     assert max(h["style"]) > 0.0  # ...while the image really did move
 
 
 def test_style_loop_zero_weights_silence_style_term():
-    # Zeroing every per-layer style weight must drive the style term to exactly 0.
+    # Zeroing every per-layer style weight drives the style term to exactly 0.
     # This pins the *layer key* in the style loop: a mutant that looks up a
-    # constant key (e.g. None) would fall back to 1.0 and leave the term non-zero.
+    # constant key (e.g. None) falls back to 1.0 and leaves the term non-zero.
     content = torch.randn(1, 3, 16, 16)
     style = torch.randn(1, 3, 16, 16)
     cfg = _cfg(steps=2, style_weights={"a": 0.0, "b": 0.0})
@@ -160,7 +196,7 @@ def test_style_loop_zero_weights_silence_style_term():
 
 
 def test_first_step_losses_match_analytic_sum():
-    # At the very first closure `generated` is still a clone of `content`, so the
+    # At the first closure `generated` is still a clone of `content`, so the
     # recorded terms must equal the plain (unit-weighted) sum of the per-layer
     # losses computed directly. Pins the accumulation operator: turning the
     # `weight * loss` product into a division would change these values.
@@ -174,10 +210,33 @@ def test_first_step_losses_match_analytic_sum():
     h = run_style_transfer(content, style, ext, cfg).history
     with torch.no_grad():
         cf, sf = ext(content), ext(style)
-        exp_c = sum(float(L.content_loss(cf[layer], cf[layer])) for layer in cfg.content_layers)
-        exp_s = sum(float(L.style_loss(cf[layer], sf[layer])) for layer in cfg.style_layers)
+        exp_c = sum(
+            float(L.content_loss(cf[layer], cf[layer]))
+            for layer in cfg.content_layers
+        )
+        exp_s = sum(
+            float(L.style_loss(cf[layer], sf[layer]))
+            for layer in cfg.style_layers
+        )
     assert h["content"][0] == pytest.approx(exp_c, abs=1e-7)
     assert h["style"][0] == pytest.approx(exp_s, rel=1e-5)
+
+
+########################################
+#            Weight routing            #
+########################################
+
+
+def test_weight_for_routes_on_kind():
+    # weight_for sends kind "content" to content_weights and everything else to
+    # style_weights. Give the same layer key opposite weights in the two tables
+    # so a swapped table or a mutated "content" literal flips the result; an
+    # absent layer must fall back to the 1.0 default in either table.
+    cfg = _cfg(content_weights={"a": 9.0}, style_weights={"a": 0.0})
+    assert cfg.weight_for("a", "content") == 9.0
+    assert cfg.weight_for("a", "style") == 0.0
+    assert cfg.weight_for("missing", "content") == 1.0
+    assert cfg.weight_for("missing", "style") == 1.0
 
 
 ########################################
@@ -193,6 +252,9 @@ def test_make_optimizer_passes_learning_rate():
     lbfgs = _make_optimizer(_cfg(optimizer="lbfgs", learning_rate=0.456), image)
     assert adam.param_groups[0]["lr"] == 0.123
     assert lbfgs.param_groups[0]["lr"] == 0.456
+    # L-BFGS runs a fixed inner loop; pin max_iter so dropping or changing it
+    # (a quietly different optimizer) is caught.
+    assert lbfgs.param_groups[0]["max_iter"] == 20
 
 
 def test_make_optimizer_rejects_unknown():

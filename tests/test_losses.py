@@ -98,11 +98,19 @@ def test_tv_loss_exact_value_pins_both_axes():
     # A 3x3 image with a distinct value in every cell: both the height and width
     # neighbour-difference slices then have length > 1, so the slice *direction*
     # matters. (A 2x2 image cannot pin this -- there `:-1` and `:1` select the
-    # same single row/column, leaving `:-1 -> :+1` mutations alive.) Comparing to
-    # F.mse_loss on the correct slices also pins the diff_h + diff_w combination.
-    img = torch.tensor([[[[0.0, 1.0, 2.0], [3.0, 5.0, 8.0], [13.0, 21.0, 34.0]]]])
-    expected_h = torch.nn.functional.mse_loss(img[:, :, :-1, :], img[:, :, 1:, :])
-    expected_w = torch.nn.functional.mse_loss(img[:, :, :, :-1], img[:, :, :, 1:])
+    # same single row/column, leaving `:-1 -> :+1` mutations alive.) Also
+    # comparing to F.mse_loss on the right slices pins diff_h + diff_w.
+    img = torch.tensor(
+        [[[[0.0, 1.0, 2.0], [3.0, 5.0, 8.0], [13.0, 21.0, 34.0]]]],
+    )
+    expected_h = torch.nn.functional.mse_loss(
+        img[:, :, :-1, :],
+        img[:, :, 1:, :],
+    )
+    expected_w = torch.nn.functional.mse_loss(
+        img[:, :, :, :-1],
+        img[:, :, :, 1:],
+    )
     tv = losses.total_variation_loss(img)
     assert torch.isclose(tv, expected_h + expected_w)
     assert tv.item() > 0

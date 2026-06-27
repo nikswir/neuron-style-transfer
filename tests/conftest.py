@@ -7,16 +7,16 @@ import torch
 import pytest
 
 ########################################
-#          Backbone test gate          #
+#          Stage-2 test gate           #
 ########################################
 
-# Backbone tests download pretrained weights; skip them unless explicitly
-# enabled (set ST_RUN_BACKBONE=1) so the core suite stays offline and fast.
-RUN_BACKBONE = os.environ.get("ST_RUN_BACKBONE") == "1"
+# Stage-2 tests are heavy (download data/weights, GPU, slow); skip them unless
+# explicitly enabled (RUN_STAGE2=1) so the default suite stays offline and fast.
+RUN_STAGE2 = os.environ.get("RUN_STAGE2") == "1"
 
-requires_backbone = pytest.mark.skipif(
-    not RUN_BACKBONE,
-    reason="set ST_RUN_BACKBONE=1 to run tests that download pretrained weights",
+stage2 = pytest.mark.skipif(
+    not RUN_STAGE2,
+    reason="set RUN_STAGE2=1 to run heavy stage-2 tests",
 )
 
 

@@ -24,7 +24,7 @@ def test_to_tensor_shape_and_batch_dim():
 def test_roundtrip_recovers_image():
     to_tensor, to_image = build_transforms(image_size=32)
     original = Image.fromarray(
-        np.random.RandomState(0).randint(0, 256, (32, 32, 3), dtype=np.uint8)
+        np.random.RandomState(0).randint(0, 256, (32, 32, 3), dtype=np.uint8),
     )
     t = to_tensor(original)
     recovered = to_image(t)
@@ -68,14 +68,17 @@ def test_to_image_clamps_both_bounds_exactly():
 def test_load_and_save_image_roundtrip_via_disk(tmp_path):
     # Exercises the public file I/O used by the CLI and experiments.
     src = tmp_path / "src.png"
-    Image.fromarray(np.random.RandomState(1).randint(0, 256, (40, 40, 3), dtype=np.uint8)).save(src)
+    Image.fromarray(
+        np.random.RandomState(1).randint(0, 256, (40, 40, 3), dtype=np.uint8),
+    ).save(src)
 
     tensor = load_image(src, image_size=32)
     assert tensor.shape == (1, 3, 32, 32)
 
     dst = tmp_path / "out.jpg"
-    save_image(tensor, dst, image_size=32)
+    save_image(tensor, dst)
     assert dst.exists()
+    # The saved size follows the tensor's own spatial size (32x32 here).
     assert Image.open(dst).size == (32, 32)
 
 
