@@ -16,6 +16,25 @@ Repo-specific commands (how to run the app) live in the README.
 | config                   | Hydra structured configs                   |
 | commit gate              | pre-commit                                 |
 
+## Quick commands (`just`)
+
+A `justfile` provides shortcuts for the common tasks — run `just` to list them:
+
+| Recipe          | Runs                              |
+| --------------- | --------------------------------- |
+| `just install`  | `uv sync`                         |
+| `just hooks`    | `uv run pre-commit install`       |
+| `just lint`     | `uv run pre-commit run --all-files` |
+| `just test`     | `uv run pytest`                   |
+| `just stage2`   | `RUN_STAGE2=1 uv run pytest`      |
+| `just cov`      | `uv run pytest --cov`             |
+| `just run`      | `uv run python -m style_transfer.run` |
+
+It is a thin convenience layer that **calls** these entrypoints — the
+`pre-commit` gate stays the single source of truth, so `just` is never required
+(the raw commands below and in the README work unchanged). `test`, `stage2` and
+`run` forward extra args (e.g. `just run backbone=resnet50`, `just test -k gram`).
+
 ## Code style
 
 The full rules live in `.claude/rules/code-style.md` — a path-scoped rule that
