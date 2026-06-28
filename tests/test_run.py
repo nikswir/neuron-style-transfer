@@ -7,6 +7,7 @@ end-to-end without downloading pretrained weights.
 
 from __future__ import annotations
 
+import torch
 import numpy as np
 
 from PIL import Image
@@ -120,6 +121,78 @@ def test_run_bridges_config_into_transfer_config(tmp_path, monkeypatch):
     # load_image must use cfg.runtime.image_size (16); a dropped size -> 512.
     assert captured["content"].shape == (1, 3, 16, 16)
     assert captured["style"].shape == (1, 3, 16, 16)
+
+
+def test_run_propagates_picked_device(tmp_path, monkeypatch):
+    # The resolved device must reach build_extractor(...).to(device) and every
+    # load_image(...) call. On CPU a dropped device (.to(None), load_image(...,
+    # None)) is a silent no-op, so the size-only smoke test cannot catch it;
+    # spy on the device handed to each seam explicitly.
+    content = tmp_path / "c.png"
+    style = tmp_path / "s.png"
+    _write_image(content)
+    _write_image(style)
+
+    sentinel = torch.device("cpu")
+    monkeypatch.setattr(run_module, "pick_device", lambda requested: sentinel)
+
+    seen: dict = {}
+
+    class _SpyExtractor(TinyExtractor):
+        def to(self, device):
+            seen["extractor_to"] = device
+            return self
+
+    monkeypatch.setattr(
+        run_module,
+        "build_extractor",
+        lambda *a, **k: _SpyExtractor(),
+    )
+
+    real_load = run_module.load_image
+
+    def _spy_load(path, image_size, device):
+        seen.setdefault("load_devices", []).append(device)
+        return real_load(path, image_size, device)
+
+    monkeypatch.setattr(run_module, "load_image", _spy_load)
+    monkeypatch.setattr(
+        run_module,
+        "run_style_transfer",
+        lambda content_t, style_t, extractor, cfg: TransferResult(
+            image=content_t,
+            history={},
+        ),
+    )
+
+    run_module.run(_cfg(content, style), tmp_path / "run")
+
+    assert seen["extractor_to"] is sentinel
+    assert seen["load_devices"] == [sentinel, sentinel]
+
+
+def test_run_creates_nested_output_dir_and_is_idempotent(tmp_path, monkeypatch):
+    # out_dir.mkdir(parents=True, exist_ok=True): without `parents` a nested
+    # path raises FileNotFoundError, without `exist_ok` a re-run into the
+    # existing dir raises FileExistsError. Pin both flags here.
+    content = tmp_path / "c.png"
+    style = tmp_path / "s.png"
+    _write_image(content)
+    _write_image(style)
+
+    monkeypatch.setattr(
+        run_module,
+        "build_extractor",
+        lambda *a, **k: TinyExtractor(),
+    )
+
+    out_dir = tmp_path / "deep" / "nested" / "run"  # parents do not exist yet
+    first = run_module.run(_cfg(content, style), out_dir)
+    assert first.exists()
+
+    # Re-running into the now-existing nested directory must not raise.
+    second = run_module.run(_cfg(content, style), out_dir)
+    assert second.exists()
 
 
 ########################################
