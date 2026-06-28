@@ -67,9 +67,9 @@ def test_transferconfig_contract() -> None:
         ("style_weights", FACTORY),
         ("content_weight", 1.0),
         ("style_weight", 1e6),
-        ("learning_rate", 1.0),
-        ("optimizer", "lbfgs"),
         ("tv_weight", 1.0),
+        ("optimizer", "lbfgs"),
+        ("learning_rate", 1.0),
         ("steps", 50),
     ]
 
