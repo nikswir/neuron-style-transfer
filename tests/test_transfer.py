@@ -91,7 +91,7 @@ def test_callback_invoked_per_step():
         images.append(img)
         losses_seen.append(losses)
 
-    run_style_transfer(
+    result = run_style_transfer(
         content,
         style,
         TinyExtractor(),
@@ -105,6 +105,14 @@ def test_callback_invoked_per_step():
     assert all(img is not None for img in images)
     assert all(img.shape == content.shape for img in images)
     assert all(not img.requires_grad for img in images)
+
+    # Each frame must be an independent *snapshot*, not an alias of the one
+    # optimized tensor. A bare `.detach()` (no `.clone()`) hands back a view of
+    # the same storage that the optimizer keeps mutating in place, so every
+    # frame ends byte-identical to the final image. Pin both: distinct storage
+    # per frame, and at least one intermediate frame differing from the final.
+    assert len({img.data_ptr() for img in images}) == len(images)
+    assert any(not torch.equal(img, result.image) for img in images)
 
     # The third argument is the per-step loss snapshot: every recorded term,
     # finite. Pins the `last` mapping -- a mutant nulling it would surface here.

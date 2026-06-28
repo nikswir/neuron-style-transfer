@@ -39,9 +39,11 @@ def gram_matrix(
 ) -> torch.Tensor:
     """Normalized Gram matrix of a feature map batch ``(B, C, H, W)``.
 
-    Returns a ``(B, C, C)`` tensor. The result is divided by ``C * H * W`` so
-    its magnitude does not scale with feature-map size; this normalization is
-    absorbed into the style weights and keeps them comparable across layers.
+    Returns a ``(B, C, C)`` tensor divided by ``C * H * W`` so its magnitude
+    does not scale with feature-map *size*. This does not, however, equalize
+    the style term across layers: :func:`style_loss` averages over the
+    ``C * C`` entries, so a layer's contribution still scales with its channel
+    count ``C``.
     """
     # ── Channel correlations over all spatial positions ──
     b, c, h, w = features.size()
@@ -68,10 +70,11 @@ def style_loss(
 def total_variation_loss(
     image: torch.Tensor,
 ) -> torch.Tensor:
-    """Isotropic total-variation regularizer on a ``(B, C, H, W)`` image.
+    """Anisotropic total-variation regularizer on a ``(B, C, H, W)`` image.
 
-    Differences are taken along the spatial height (dim 2) and width (dim 3)
-    axes -- *not* across colour channels.
+    The height (dim 2) and width (dim 3) neighbour differences are penalized
+    separately and summed -- the *anisotropic* form, not combined under a
+    square root -- and *not* taken across colour channels.
     """
     # ── Neighbour differences along height, then width ──
     diff_h = F.mse_loss(image[:, :, :-1, :], image[:, :, 1:, :])

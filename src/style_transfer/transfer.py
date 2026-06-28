@@ -33,6 +33,11 @@ class TransferConfig:
     ``content_layers`` / ``style_layers`` select which extractor outputs feed
     the corresponding loss. The per-layer weight dicts default to ``1.0`` for
     any selected layer not listed explicitly.
+
+    ``steps`` counts *outer* optimizer steps. For L-BFGS each step runs a fixed
+    inner loop (``max_iter=20``), so the loss history holds 20 entries per step;
+    for Adam each step records exactly one. Per-step histories are therefore not
+    directly comparable across optimizers.
     """
 
     content_layers: list[str]
@@ -41,9 +46,9 @@ class TransferConfig:
     style_weights: dict[str, float] = field(default_factory=dict)
     content_weight: float = 1.0
     style_weight: float = 1e6
-    learning_rate: float = 1.0
-    optimizer: str = "lbfgs"
     tv_weight: float = 1.0
+    optimizer: str = "lbfgs"
+    learning_rate: float = 1.0
     steps: int = 50
 
     def weight_for(
@@ -194,6 +199,6 @@ def run_style_transfer(
         if callback is not None:
             with torch.no_grad():
                 last = {k: v[-1] for k, v in history.items() if v}
-            callback(i, generated.detach(), last)
+            callback(i, generated.detach().clone(), last)
 
     return TransferResult(image=generated.detach(), history=history)
