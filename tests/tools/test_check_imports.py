@@ -37,6 +37,20 @@ def test_name_ladder_break_flagged(tmp_path: Path) -> None:
     assert _check(tmp_path, "from x import bbbb, a\n") is True
 
 
+def test_comment_between_imports_does_not_split_block(tmp_path: Path) -> None:
+    # Only a *blank* line separates blocks (§6). A comment between two imports
+    # keeps them in one block, so a length-descending pair across the comment
+    # must still be flagged -- the old line-gap heuristic treated the comment as
+    # a separator and hid the ladder break.
+    assert _check(tmp_path, "import argparse\n# a note\nimport ast\n") is True
+
+
+def test_blank_line_still_separates_blocks(tmp_path: Path) -> None:
+    # A genuine blank line *does* separate blocks, so the same two imports in a
+    # descending order are no longer compared and the block is clean.
+    assert _check(tmp_path, "import argparse\n\nimport ast\n") is False
+
+
 def test_bare_relative_import_flagged(tmp_path: Path) -> None:
     # `from . import x` has module=None (root ""); still a relative import.
     assert _check(tmp_path, "from . import x\n") is True

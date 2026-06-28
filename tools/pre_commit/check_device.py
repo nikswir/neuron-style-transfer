@@ -20,11 +20,24 @@ from pathlib import Path
 #               Patterns               #
 ########################################
 
-# ── Each (pattern, message) is a hard-coded-device smell ──
+# ── Each (pattern, message) is a hard-coded-device smell. An optional
+#    ``:N`` index (cuda:0, cuda:1) is part of the literal, so it is caught
+#    too. Bare ``torch.device("cuda")`` (device *selection*) stays exempt;
+#    pinning it onto a tensor with ``.to(torch.device("cuda"))`` does not. ──
 SMELLS = [
     (re.compile(r"\.cuda\("), "hard-coded .cuda() call"),
-    (re.compile(r"""\.to\(\s*["']cuda["']"""), 'hard-coded .to("cuda")'),
-    (re.compile(r"""device\s*=\s*["']cuda["']"""), 'hard-coded device="cuda"'),
+    (
+        re.compile(r"""\.to\(\s*["']cuda(:\d+)?["']"""),
+        'hard-coded .to("cuda")',
+    ),
+    (
+        re.compile(r"""\.to\(\s*torch\.device\(\s*["']cuda(:\d+)?["']"""),
+        'hard-coded .to(torch.device("cuda"))',
+    ),
+    (
+        re.compile(r"""device\s*=\s*["']cuda(:\d+)?["']"""),
+        'hard-coded device="cuda"',
+    ),
 ]
 ALLOW = "# device-ok"
 

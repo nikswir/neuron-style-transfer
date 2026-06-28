@@ -88,14 +88,21 @@ def parse_imports(source: str) -> list[Imp]:
     return imports
 
 
-def blocks_of(imports: list[Imp]) -> list[list[Imp]]:
-    # ── Group imports separated by a blank line into the same block ──
+def blocks_of(
+    imports: list[Imp],
+    lines: list[str],
+) -> list[list[Imp]]:
+    # ── Group imports into blocks. Only a *blank* line separates blocks
+    #    (code-style §6); a comment between two imports does not, so they
+    #    stay in one block and must still ladder. ──
     blocks: list[list[Imp]] = []
     current: list[Imp] = []
     for imp in imports:
-        if current and imp.line > current[-1].end + 1:
-            blocks.append(current)
-            current = []
+        if current:
+            between = lines[current[-1].end : imp.line - 1]
+            if any(not text.strip() for text in between):
+                blocks.append(current)
+                current = []
         current.append(imp)
     if current:
         blocks.append(current)
@@ -118,10 +125,12 @@ def category(imp: Imp, first_party: set[str]) -> int:
 
 
 def check_file(path: Path, first_party: set[str]) -> bool:
+    source = path.read_text()
     try:
-        imports = parse_imports(path.read_text())
+        imports = parse_imports(source)
     except SyntaxError:
         return False  # leave syntax errors to ruff / python
+    lines = source.splitlines()
     bad = False
 
     # ── Absolute imports only: a leading dot is a relative import ──
@@ -146,7 +155,7 @@ def check_file(path: Path, first_party: set[str]) -> bool:
         prev_cat = cat
 
     # ── Within each block, single-line imports rise in length ──
-    for block in blocks_of(imports):
+    for block in blocks_of(imports, lines):
         for a, b in zip(block, block[1:], strict=False):
             if len(b.logical) < len(a.logical):
                 print(
@@ -156,7 +165,7 @@ def check_file(path: Path, first_party: set[str]) -> bool:
                 bad = True
 
     # ── A parenthesised multi-line import is set off as its own block ──
-    for block in blocks_of(imports):
+    for block in blocks_of(imports, lines):
         if len(block) > 1:
             for imp in block:
                 if imp.end > imp.line:
