@@ -26,7 +26,7 @@ texput.log
 # OS / editor
 .DS_Store
 .idea/
-.vscode/
+
 # Mutation testing
 mutants/
 .mutmut-cache
