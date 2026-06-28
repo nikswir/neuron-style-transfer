@@ -27,21 +27,27 @@ The total loss is a weighted sum of the three terms:
 
 $$\mathcal{L} = \alpha\,\mathcal{L}_{\text{content}} + \beta\,\mathcal{L}_{\text{style}} + \gamma\,\mathcal{L}_{\text{TV}}$$
 
-**Content loss** — squared distance between the deep-layer activations of the
-generated image $F^l$ and the content image $P^l$:
+**Content loss** — mean squared error between the deep-layer activations of the
+generated image $F^l$ and the content image $P^l$ (a mean, not a bare sum):
 
-$$\mathcal{L}_{\text{content}} = \tfrac{1}{2}\sum_{i,j}\left(F^{l}_{ij} - P^{l}_{ij}\right)^2$$
+$$\mathcal{L}_{\text{content}} = \operatorname{mean}_{i,j}\left(F^{l}_{ij} - P^{l}_{ij}\right)^2$$
 
-**Style loss** — squared distance between the Gram matrices (channel
-correlations) $G^l$ of the generated image and $A^l$ of the style image,
-summed over several layers $l$ with weights $w_l$:
+**Style loss** — mean squared error between the *normalized* Gram matrices
+(channel correlations) $G^l$ of the generated image and $A^l$ of the style
+image, summed over several layers $l$ with weights $w_l$. Each Gram matrix is
+divided by $C_l H_l W_l$ so its magnitude is size-independent:
 
-$$G^{l}_{ij} = \sum_{k} F^{l}_{ik}\,F^{l}_{jk}, \qquad \mathcal{L}_{\text{style}} = \sum_{l} w_l \, \lVert G^{l} - A^{l} \rVert_2^2$$
+$$G^{l}_{ij} = \frac{1}{C_l H_l W_l}\sum_{k} F^{l}_{ik}\,F^{l}_{jk}, \qquad \mathcal{L}_{\text{style}} = \sum_{l} w_l \operatorname{mean}_{i,j}\left(G^{l}_{ij} - A^{l}_{ij}\right)^2$$
 
 **Total-variation loss** — smoothness regularizer penalizing differences between
-neighbouring pixels of the generated image $I$:
+neighbouring pixels of the generated image $I$, averaged over each spatial
+direction (the anisotropic form):
 
-$$\mathcal{L}_{\text{TV}} = \sum_{i,j}\left(I_{i+1,j} - I_{i,j}\right)^2 + \left(I_{i,j+1} - I_{i,j}\right)^2$$
+$$\mathcal{L}_{\text{TV}} = \operatorname{mean}_{i,j}\left(I_{i+1,j} - I_{i,j}\right)^2 + \operatorname{mean}_{i,j}\left(I_{i,j+1} - I_{i,j}\right)^2$$
+
+These means (and the Gram normalization) are why the default `style_weight` is
+large ($10^6$): the weights are tuned to the averaged terms above, not to the
+bare sums of the original paper.
 
 ## Install (Python 3.10–3.12)
 
@@ -122,11 +128,15 @@ save_image(result.image, "result.jpg")
 ## Results
 
 
-| Backbone | Style layers | Texture quality | Artifacts  |
-| -------- | ------------ | --------------- | ---------- |
-| VGG16    | 13 conv      | good            | few        |
-| VGG19    | 16 conv      | best            | few        |
-| ResNet50 | 16 blocks    | medium          | noticeable |
+The style layers actually used are the five `conv*_1` layers for VGG and the
+four `stage*_block0` layers for ResNet50 (see `configs/backbone/`). The depth
+column below is the backbone's total feature depth, not the style-layer count.
+
+| Backbone | Backbone depth | Texture quality | Artifacts  |
+| -------- | -------------- | --------------- | ---------- |
+| VGG16    | 13 conv        | good            | few        |
+| VGG19    | 16 conv        | best            | few        |
+| ResNet50 | 16 blocks      | medium          | noticeable |
 
 
 ResNet50 produces noticeably noisier results: its bottleneck activations (with
