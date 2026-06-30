@@ -5,7 +5,7 @@
 Neural style transfer by image optimization (Gatys, Ecker, Bethge,
 *A Neural Algorithm of Artistic Style*, 2016), with a comparison of three
 pretrained backbones as feature extractors: **VGG16**, **VGG19** and
-**ResNet50**.[^1]
+**ResNet50**.
 
 ![A cat stylized end-to-end: content image, style image, and the result](docs/figures/teaser.png)
 
@@ -138,6 +138,3 @@ networks dominate the NST literature. See the full write-up in
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-[^1]: This repository is a refactor of the original source code, carried out
-with [Claude Code](https://claude.com/claude-code).
