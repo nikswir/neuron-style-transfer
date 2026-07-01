@@ -10,15 +10,27 @@ on:
     types: [submitted]
 jobs:
   claude:
+    # Two independent gates on WHO and on WHAT content:
+    #   1. author_association — only owner / member / collaborator can trigger.
+    #   2. fork check — never run over untrusted fork content, so the agent's
+    #      quality-gate commands (pre-commit/pytest, which execute repo code)
+    #      only ever touch trusted, same-repo content. issue_comment carries no
+    #      fork field on PRs, so it is restricted to real issues instead
+    #      (issue.pull_request == null); the PR-review events expose
+    #      pull_request.head.repo.fork directly.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request == null && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && github.event.pull_request.head.repo.fork == false && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && github.event.pull_request.head.repo.fork == false && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write # needed for `gh pr create` to open the PR
       issues: read
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
@@ -30,14 +42,19 @@ jobs:
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # gh CLI reads this token to open the PR (pull-requests: write above).
+          GH_TOKEN: ${{ github.token }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
+          # Strict allowlist: install + the full pre-commit gate + opening a PR.
+          # Deliberately NO `uv run python`/`uv run` catch-all — those execute
+          # arbitrary code and would reopen the RCE surface we gate against.
+          # After resolving an issue on a branch, open (never merge) a PR into
+          # main; branch protection (1 approval + CI) stays the real gate.
+          claude_args: |
+            --allowed-tools "Bash(uv sync:*),Bash(uv run pre-commit run:*),Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv run mypy:*),Bash(gh pr create:*)"
+            --append-system-prompt "When you have committed and pushed a branch that resolves an issue, open a pull request into main with `gh pr create --base main --head <your-branch>`, giving it a clear title and a body that references the issue. Never merge the PR — leave review and merge to a human."
