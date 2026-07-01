@@ -50,11 +50,17 @@ jobs:
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-          # Strict allowlist: install + the full pre-commit gate + opening a PR.
-          # Deliberately NO `uv run python`/`uv run` catch-all — those execute
-          # arbitrary code and would reopen the RCE surface we gate against.
+          # Allowlist: install + the full pre-commit gate + arbitrary Python
+          # (`uv run python`) + opening a PR. Arbitrary Python is safe here only
+          # because the fork gate above guarantees the agent never runs over
+          # untrusted content — it always operates on trusted, same-repo code.
+          # The residual is indirect prompt injection via content the agent
+          # reads; accepted for this prototype. Still NO bare `uv run` catch-all
+          # (that allows `uv run --with <pkg>`, i.e. install+run arbitrary
+          # network packages — a supply-chain vector the fork gate does not
+          # cover).
           # After resolving an issue on a branch, open (never merge) a PR into
           # main; branch protection (1 approval + CI) stays the real gate.
           claude_args: |
-            --allowed-tools "Bash(uv sync:*),Bash(uv run pre-commit run:*),Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv run mypy:*),Bash(gh pr create:*)"
+            --allowed-tools "Bash(uv sync:*),Bash(uv run pre-commit run:*),Bash(uv run pytest:*),Bash(uv run ruff:*),Bash(uv run mypy:*),Bash(uv run python:*),Bash(gh pr create:*)"
             --append-system-prompt "When you have committed and pushed a branch that resolves an issue, open a pull request into main with `gh pr create --base main --head <your-branch>`, giving it a clear title and a body that references the issue. Never merge the PR — leave review and merge to a human."
