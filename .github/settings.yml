@@ -8,6 +8,14 @@
 #   - the CLAUDE_CODE_OAUTH_TOKEN secret — add it via `gh secret set` or the UI
 #   - the Claude GitHub App installation
 
+# Least-privilege identity for the local Claude Code session: Write (push), not
+# Admin — so it can branch / commit / push / open PRs, but cannot force-push a
+# protected branch, change these settings, or delete the repo. The human owner
+# keeps Admin separately. `push` == the Write role.
+collaborators:
+  - username: nikswir-claude
+    permission: push
+
 repository:
   # Public prototype repository.
   private: false
